@@ -13,17 +13,14 @@ try:
         i = i.strip()
         z = i.split(":")
         anime[z[0]] = int(z[1].strip())
-    print("hier1")
     for i in mangaValues:
         i = i.strip()
         z = i.split(":")
         manga[z[0]] = int(z[1].strip())
-        print("hier2")
     for i in lightnovelValues:
         i = i.strip()
         z = i.split(":")
         lightnovel[z[0]] = int(z[1].strip())
-        print("hier2")
 
 except:
     datafile = open("MALdata.txt", "w+")

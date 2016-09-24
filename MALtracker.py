@@ -2,27 +2,26 @@ manga = {}
 anime = {}
 lightnovel = {}
 succes = False
+dicts = [anime, manga, lightnovel]
+values = []
+
+def extract(values, dict):
+    for i in values:
+        i = i.strip()
+        z = i.split(":")
+        dict[z[0]] = int(z[1].strip())
+
 try:
     datafile = open("MALdata.txt", "r+")
-    information = datafile.read()
-    information = information.split("*")[1:]
-    animeValues = information[0].split("`")[1].split(",")[:-1]
-    mangaValues = information[1].split("`")[1].split(",")[:-1]
-    lightnovelValues = information[2].split("`")[1].split(",")[:-1]
-    for i in animeValues:
-        i = i.strip()
-        z = i.split(":")
-        anime[z[0]] = int(z[1].strip())
-    for i in mangaValues:
-        i = i.strip()
-        z = i.split(":")
-        manga[z[0]] = int(z[1].strip())
-    for i in lightnovelValues:
-        i = i.strip()
-        z = i.split(":")
-        lightnovel[z[0]] = int(z[1].strip())
+    information = datafile.read().split("*")[1:]
+    for i in information:
+        print(i)
+        values.append(i.split("`")[1].split(",")[:-1])
+    for i in range(len(values)):
+        extract(values[i], dicts[i])
 
 except:
+    print("file not found")
     datafile = open("MALdata.txt", "w+")
     information = ""
 

@@ -1,0 +1,15 @@
+Anime entries: 0
+Manga entries: 0
+Lightnovel entries: 0
+@#!
+Anime:
+@#1
+entries
+@#!
+Manga:
+@#2
+entries
+@#!
+Lightnovels:
+@#3
+entries

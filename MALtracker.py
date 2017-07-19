@@ -4,6 +4,7 @@ lightnovel = {}
 succes = False
 dicts = [anime, manga, lightnovel]
 values = []
+userInput = ["", "", ""]
 
 def extract(values, dict):
     for i in values:
@@ -11,11 +12,31 @@ def extract(values, dict):
         z = i.split(":")
         dict[z[0]] = int(z[1].strip())
 
+def add():
+    while True:
+        try:
+            userInput = input("Enter information in order: name, number, type\n").split(",")
+            break
+        except:
+            print("enter valid information")
+
+    return userInput
+
+def view(dict, type):
+    print(type + ":")
+    for i in dict:
+        print(i + ": " + str(dict[i]))
+    print()
+
+def viewAll(dictList, typeList):
+    for i in range(len(dictList)):
+        view(dictList[i], typeList[i])
+
+
 try:
     datafile = open("MALdata.txt", "r+")
     information = datafile.read().split("*")[1:]
     for i in information:
-        print(i)
         values.append(i.split("`")[1].split(",")[:-1])
     for i in range(len(values)):
         extract(values[i], dicts[i])
@@ -23,17 +44,25 @@ try:
 except:
     print("file not found")
     datafile = open("MALdata.txt", "w+")
-    information = ""
-
 
 while True:
     try:
-        userInput = input("Enter information in order: name, number, type\n")
-        userInput = userInput.split(",")
-        userInput[1] = int(userInput[1])
-        break
+        command = input("Please enter a command\n").lower()
+        if command == "add":
+            userInput = add()
+        elif command == "view manga":
+            view(manga, "manga")
+        elif command == "view anime":
+            view(anime, "anime")
+        elif command == "view lightnovel":
+            view(lightnovel, "lightnovel")
+        elif command == "view all":
+            viewAll(dict, ["anime", "manga", "lightnovel"])
+        elif command == "quit" or command == "q":
+            break
+
     except:
-        print("enter valid information")
+        print("please enter a valid command")
 
 datafile.close()
 datafile = open("MALdata.txt", "w+")

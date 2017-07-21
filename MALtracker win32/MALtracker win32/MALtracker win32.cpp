@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <experimental\filesystem>
 #include <Windows.h>
-#include <boost/algorithm/string.hpp>
+#include <boost\algorithm\string.hpp>
 #include <climits>
+#include <cctype>
+#include <locale>
 
 namespace fs = std::experimental::filesystem;
 using namespace std;
@@ -19,6 +21,9 @@ void SaveUserInput(vector<string> user_input, string file_path);
 vector<string> CreateSaveFileVector(string file_path);
 int CalculateScore(string entry);
 int CompareScores(int user_score, int test_score);
+static inline void ltrim(std::string &s);
+static inline void rtrim(std::string &s);
+static inline void trim(std::string &s);
 
 int main()
 {
@@ -111,7 +116,6 @@ string ExePath() {
 int CheckSaveFile(string path)
 {
 	string save_path = path + "\\save_file.txt";
-	string file_path;
 	int state = 0;
 	for (auto & p : fs::directory_iterator(path)) 
 	{
@@ -152,10 +156,11 @@ void SaveUserInput(vector<string> user_input, string file_path)
 	int loop_state = 0;
 	int score_user = CalculateScore(user_input[1]);
 	vector<string> data_vector = CreateSaveFileVector(file_path);
+	vector<int>::iterator it;
+	trim(user_input[1]);
 	for (int i = 3; i < data_vector.size(); ++i)
 	{
 		boost::to_lower(data_vector[i]);
-		cout << data_vector[i] << " vs " << user_input[0] + ":" << endl;
 		if (data_vector[i] == "@#!")
 		{
 			loop_state = 0;
@@ -170,7 +175,9 @@ void SaveUserInput(vector<string> user_input, string file_path)
 		{
 			if (CompareScores(score_user, CalculateScore(data_vector[i])))
 			{
-				cout << "insert user input" << endl;
+				auto it = data_vector.begin() + i;
+				it = data_vector.insert(it, user_input[1]);
+				cout << data_vector[i] << endl;
 				break;
 			}
 		}
@@ -213,3 +220,22 @@ int CompareScores(int user_score, int test_score)
 	else
 		return 0;
 }
+
+static inline void ltrim(std::string &s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+		return !std::isspace(ch);
+	}));
+}
+
+static inline void rtrim(std::string &s) {
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+		return !std::isspace(ch);
+	}).base(), s.end());
+}
+
+static inline void trim(std::string &s) {
+	ltrim(s);
+	rtrim(s);
+}
+
+// voeg sql database integratie

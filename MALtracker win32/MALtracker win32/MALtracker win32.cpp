@@ -1,3 +1,4 @@
+// import library's
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -8,10 +9,13 @@
 #include <climits>
 #include <cctype>
 #include <locale>
+#include "sqlite3.h"
 
+// set namespaces
 namespace fs = std::experimental::filesystem;
 using namespace std;
 
+// function declarations
 vector<string> UserEntry();
 string ExePath();
 int CheckSaveFile(string path);
@@ -24,9 +28,21 @@ int CompareScores(int user_score, int test_score);
 static inline void ltrim(std::string &s);
 static inline void rtrim(std::string &s);
 static inline void trim(std::string &s);
+static int callback(void *NotUsed, int argc, char **argv, char **azColName);
+sqlite3* CreateDB();
+void InsertUserInput(sqlite3 *db, vector<string> user_input);
+static int getCheckResult(void *data, int argc, char **argv, char **azColName);
+void UpdateUserInput(sqlite3 *db, vector<string> user_input);
 
+// main function
 int main()
 {
+	// declaring variables
+	sqlite3 *db;
+	const char *sql;
+	const char *data = "Callback function called";
+	char *zErrMsg = 0;
+	int rc;
 	string path_file = ExePath();
 	int file_state = CheckSaveFile(path_file);
 	string file_path = "";
@@ -42,7 +58,19 @@ int main()
 	}
 	vector<string> user_input = UserEntry();
 	SaveUserInput(user_input, path_file+"\\save_file.txt");
-	
+
+	db = CreateDB();
+	trim(user_input[1]);
+	string temp = "SELECT EXISTS(SELECT 1 FROM MALTRACKER WHERE NAME = '" + user_input[1] + "' LIMIT 1);";
+	//string temp = "SELECT * from MALTRACKER where NAME = 'one'";
+	sql = temp.c_str();
+	rc = sqlite3_exec(db, sql, getCheckResult, (void*)data, &zErrMsg);
+	if (rc != SQLITE_OK) {
+		fprintf(stdout, "Update required\n");
+	}
+	else {
+		InsertUserInput(db, user_input);
+	}
 	return 0;
 }
 
@@ -221,21 +249,127 @@ int CompareScores(int user_score, int test_score)
 		return 0;
 }
 
-static inline void ltrim(std::string &s) {
+static inline void ltrim(std::string &s) 
+{
 	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
 		return !std::isspace(ch);
 	}));
 }
 
-static inline void rtrim(std::string &s) {
+static inline void rtrim(std::string &s) 
+{
 	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
 		return !std::isspace(ch);
 	}).base(), s.end());
 }
 
-static inline void trim(std::string &s) {
+static inline void trim(std::string &s) 
+{
 	ltrim(s);
 	rtrim(s);
 }
 
-// voeg sql database integratie
+static int callback(void *data, int argc, char **argv, char **azColName) 
+{
+	int i;
+	fprintf(stderr, "%s: ", (const char*)data);
+
+	for (i = 0; i < argc; i++) {
+		printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+	}
+	printf("\n");
+	return 0;
+}
+
+static int getCheckResult(void *data, int argc, char **argv, char **azColName)
+{
+	char* temp = argv[0];
+	int cal = temp[0] - '0';
+	return cal;
+}
+
+sqlite3* CreateDB()
+{
+	sqlite3 *database;
+	char *zErrMsg = 0;
+	int rc;
+	char *sql;
+
+	rc = sqlite3_open("save_database.db", &database);
+
+	if (rc) {
+		fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(database));
+		return 0;
+	}
+	else {
+		fprintf(stderr, "Opened database succesfully\n");
+	}
+
+	sql = "CREATE TABLE IF NOT EXISTS MALTRACKER(" \
+		  "NAME           TEXT  NOT NULL," \
+		  "LIGHTNOVEL    TEXT," \
+		  "MANGA          TEXT," \
+		  "ANIME          TEXT );";
+		
+	rc = sqlite3_exec(database, sql, callback, 0, &zErrMsg);
+
+	if (rc != SQLITE_OK) 
+	{
+		fprintf(stderr, "SQL error: %s\n", zErrMsg);
+		sqlite3_free(zErrMsg);
+	}
+	else
+	{
+		fprintf(stdout, "Table innitialized successfully\n");
+	}
+
+	return database;
+}
+
+void InsertUserInput(sqlite3 *db, vector<string> user_input)
+{
+	char *zErrMsg = 0;
+	int rc;
+	const char *sql;
+	boost::to_upper(user_input[0]);
+	trim(user_input[0]);
+	trim(user_input[1]);
+	trim(user_input[2]);
+	string dpz = "INSERT INTO MALTRACKER (NAME," + user_input[0] + ")" \
+		"VALUES ('" + user_input[1] + "'," + user_input[2] + ");";
+	sql = dpz.c_str();
+	rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
+
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", zErrMsg);
+		sqlite3_free(zErrMsg);
+	}
+	else {
+		fprintf(stdout, "Records created successfully\n");
+	}
+	sqlite3_close(db);
+}
+
+void UpdateUserInput(sqlite3 *db, vector<string> user_input)
+{
+	char *zErrMsg = 0;
+	int rc;
+	const char *sql;
+	boost::to_upper(user_input[0]);
+	trim(user_input[0]);
+	trim(user_input[1]);
+	trim(user_input[2]);
+
+	string dpz = "UPDATE MALTRACKER set " + user_input[0] + " = " + user_input[2] + " where NAME = " + user_input[1] + ";";
+	sql = dpz.c_str();
+	rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
+
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", zErrMsg);
+		sqlite3_free(zErrMsg);
+	}
+	else{
+		fprintf(stdout, "Records updated successfully\n");
+	}
+	sqlite3_close(db);
+}

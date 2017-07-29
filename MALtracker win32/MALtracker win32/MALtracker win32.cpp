@@ -17,65 +17,46 @@ using namespace std;
 
 // function declarations
 vector<string> UserEntry();
-string ExePath();
-int CheckSaveFile(string path);
-string GetUserSaveFilePath();
-void CreateSaveFile(string path);
-void SaveUserInput(vector<string> user_input, string file_path);
-vector<string> CreateSaveFileVector(string file_path);
-int CalculateScore(string entry);
-int CompareScores(int user_score, int test_score);
-static inline void ltrim(std::string &s);
-static inline void rtrim(std::string &s);
-static inline void trim(std::string &s);
 static int callback(void *NotUsed, int argc, char **argv, char **azColName);
-sqlite3* CreateDB();
-void InsertUserInput(sqlite3 *db, vector<string> user_input);
+sqlite3* CreateDB(char *zErrMsg, int rc, const char *sql);
+void InsertUserInput(sqlite3 *db, vector<string> user_input, char *zErrMsg, int rc, const char *sql);
 static int getCheckResult(void *data, int argc, char **argv, char **azColName);
-void UpdateUserInput(sqlite3 *db, vector<string> user_input);
+void UpdateUserInput(sqlite3 *db, vector<string> user_input, char *zErrMsg, int rc, const char *sql);
 
 // main function
 int main()
 {
 	// declaring variables
 	sqlite3 *db;
-	const char *sql;
+	const char *sql = "";
 	const char *data = "Callback function called";
 	char *zErrMsg = 0;
-	int rc;
-	string path_file = ExePath();
-	int file_state = CheckSaveFile(path_file);
-	string file_path = "";
-	if (file_state == 0)
-	{
-		file_path = GetUserSaveFilePath();
-		boost::to_lower(file_path);
-		if (file_path == "no" || file_path == "n")
-		{
-			//create save file
-			CreateSaveFile(path_file);
-		}
-	}
+	int rc = 0;
+	
+	// receive user input
 	vector<string> user_input = UserEntry();
-	SaveUserInput(user_input, path_file+"\\save_file.txt");
 
-	db = CreateDB();
-	trim(user_input[1]);
+	// create or open database
+	db = CreateDB(zErrMsg, rc, sql);
+	// check if user input is present in the table
 	string temp = "SELECT EXISTS(SELECT 1 FROM MALTRACKER WHERE NAME = '" + user_input[1] + "' LIMIT 1);";
-	//string temp = "SELECT * from MALTRACKER where NAME = 'one'";
 	sql = temp.c_str();
+	// execute sql command
 	rc = sqlite3_exec(db, sql, getCheckResult, (void*)data, &zErrMsg);
+	// if the user input is present update de table
 	if (rc != SQLITE_OK) {
-		fprintf(stdout, "Update required\n");
+		UpdateUserInput(db, user_input, zErrMsg, rc, sql);
 	}
+	// if the input is not present, insert the data in the table
 	else {
-		InsertUserInput(db, user_input);
+		InsertUserInput(db, user_input, zErrMsg, rc, sql);
 	}
 	return 0;
 }
 
 vector<string> UserEntry()
 {
+	// declaring variables
 	size_t character_count;
 	vector<string> entryvec;
 	string entry;
@@ -122,159 +103,29 @@ vector<string> UserEntry()
 				state = 1;
 			}
 			// lower first input
-			boost::to_lower(entryvec[0]);
+			boost::to_upper(entryvec[0]);
 			// check if first user input is 1 of the 3 choices
-			if (!((entryvec[0] == "manga") || (entryvec[0] == "anime") || (entryvec[0] == "lightnovel")))
+			if (!((entryvec[0] == "MANGA") || (entryvec[0] == "ANIME") || (entryvec[0] == "LIGHTNOVEL")))
 			{
 				cout << "Error: an invalid type has been entered/nPlease enter one of the following types: manga, anime or lightnovel" << endl;
 				state = 1;
 			}
+			// trim whitespace from input
+			boost::trim(entryvec[0]);
+			boost::trim(entryvec[1]);
+			boost::trim(entryvec[2]);
 		}
 	}
 	return entryvec;
 }
 
-string ExePath() {
-	char buffer[MAX_PATH];
-	GetModuleFileName(NULL, buffer, MAX_PATH);
-	string::size_type pos = string(buffer).find_last_of("\\/");
-	return string(buffer).substr(0, pos);
-}
-
-int CheckSaveFile(string path)
-{
-	string save_path = path + "\\save_file.txt";
-	int state = 0;
-	for (auto & p : fs::directory_iterator(path)) 
-	{
-		if (p.path().string() == save_path)
-		{
-			state = 1;
-			break;
-		}
-
-	}
-	return state;
-}
-
-string GetUserSaveFilePath()
-{
-	string input_user = "no";
-	cout << "No save file detected.\n"
-		<< "Please enter a save file path if located elsewhere.\n"
-		<< "Enter no to create a new save file." << endl;
-	getline(cin, input_user);
-	return input_user;
-}
-
-void CreateSaveFile(string path)
-{
-	ofstream save_file(path + "//save_file.txt");
-	save_file << "Anime entries: 0" << endl;
-	save_file << "Manga entries: 0" << endl;
-	save_file << "Lightnovel entries: 0" << endl;
-	save_file << "@#!\nAnime:\n@#1\nentries" << endl;
-	save_file << "@#!\nManga:\n@#2\nentries" << endl;
-	save_file << "@#!\nLightnovels:\n@#3\nentries" << endl;
-	save_file.close();
-}
-
-void SaveUserInput(vector<string> user_input, string file_path)
-{
-	int loop_state = 0;
-	int score_user = CalculateScore(user_input[1]);
-	vector<string> data_vector = CreateSaveFileVector(file_path);
-	vector<int>::iterator it;
-	trim(user_input[1]);
-	for (int i = 3; i < data_vector.size(); ++i)
-	{
-		boost::to_lower(data_vector[i]);
-		if (data_vector[i] == "@#!")
-		{
-			loop_state = 0;
-		}
-		else if (data_vector[i] == (user_input[0] + ":"))
-		{
-			loop_state = 1;
-			i += 2;
-		}
-		
-		if (loop_state)
-		{
-			if (CompareScores(score_user, CalculateScore(data_vector[i])))
-			{
-				auto it = data_vector.begin() + i;
-				it = data_vector.insert(it, user_input[1]);
-				cout << data_vector[i] << endl;
-				break;
-			}
-		}
-	}
-}
-
-vector<string> CreateSaveFileVector(string file_path)
-{
-	vector<string> save_file_lines;
-	ifstream save_file(file_path.c_str());
-	string line;
-	while (getline(save_file, line))
-	{
-		if (!line.empty())
-			save_file_lines.push_back(line);
-	}
-	return save_file_lines;
-}
-
-int CalculateScore(string entry)
-{
-	int score = 0;
-	if (entry != "@#!")
-	{
-		for (int i = 0; i < entry.size(); ++i)
-		{
-			if (entry[i] != ' ')
-				score += entry[i] - 'A';
-		}
-	}
-	else
-		score = INT_MAX;
-	return score;
-}
-
-int CompareScores(int user_score, int test_score)
-{
-	if (user_score < test_score)
-		return 1;
-	else
-		return 0;
-}
-
-static inline void ltrim(std::string &s) 
-{
-	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-		return !std::isspace(ch);
-	}));
-}
-
-static inline void rtrim(std::string &s) 
-{
-	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-		return !std::isspace(ch);
-	}).base(), s.end());
-}
-
-static inline void trim(std::string &s) 
-{
-	ltrim(s);
-	rtrim(s);
-}
-
 static int callback(void *data, int argc, char **argv, char **azColName) 
 {
-	int i;
+	// print starting message
 	fprintf(stderr, "%s: ", (const char*)data);
 
-	for (i = 0; i < argc; i++) {
+	// loop through given return arguments and print them
+	for (int i = 0; i < argc; i++) {
 		printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
 	}
 	printf("\n");
@@ -283,20 +134,21 @@ static int callback(void *data, int argc, char **argv, char **azColName)
 
 static int getCheckResult(void *data, int argc, char **argv, char **azColName)
 {
+	// return state of execution
 	char* temp = argv[0];
 	int cal = temp[0] - '0';
 	return cal;
 }
 
-sqlite3* CreateDB()
+sqlite3* CreateDB(char *zErrMsg, int rc, const char *sql)
 {
+	// initialize database
 	sqlite3 *database;
-	char *zErrMsg = 0;
-	int rc;
-	char *sql;
 
+	// open or create database
 	rc = sqlite3_open("save_database.db", &database);
 
+	// control the return call of the open function and print appropiate error messagess
 	if (rc) {
 		fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(database));
 		return 0;
@@ -305,14 +157,17 @@ sqlite3* CreateDB()
 		fprintf(stderr, "Opened database succesfully\n");
 	}
 
+	// create sql statement to create table
 	sql = "CREATE TABLE IF NOT EXISTS MALTRACKER(" \
 		  "NAME           TEXT  NOT NULL," \
 		  "LIGHTNOVEL    TEXT," \
 		  "MANGA          TEXT," \
 		  "ANIME          TEXT );";
-		
+	
+	// execute sql statement
 	rc = sqlite3_exec(database, sql, callback, 0, &zErrMsg);
 
+	// control the return call of the execute function and print appropiate error messagess
 	if (rc != SQLITE_OK) 
 	{
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -326,20 +181,17 @@ sqlite3* CreateDB()
 	return database;
 }
 
-void InsertUserInput(sqlite3 *db, vector<string> user_input)
+void InsertUserInput(sqlite3 *db, vector<string> user_input, char *zErrMsg, int rc, const char *sql)
 {
-	char *zErrMsg = 0;
-	int rc;
-	const char *sql;
-	boost::to_upper(user_input[0]);
-	trim(user_input[0]);
-	trim(user_input[1]);
-	trim(user_input[2]);
+	// create sql statement to insert data in table
 	string dpz = "INSERT INTO MALTRACKER (NAME," + user_input[0] + ")" \
 		"VALUES ('" + user_input[1] + "'," + user_input[2] + ");";
 	sql = dpz.c_str();
+	
+	// execute sql statement
 	rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
+	// control the return call of the execute function and print appropiate error messagess
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
 		sqlite3_free(zErrMsg);
@@ -347,23 +199,22 @@ void InsertUserInput(sqlite3 *db, vector<string> user_input)
 	else {
 		fprintf(stdout, "Records created successfully\n");
 	}
+	
+	// close database
 	sqlite3_close(db);
 }
 
-void UpdateUserInput(sqlite3 *db, vector<string> user_input)
+void UpdateUserInput(sqlite3 *db, vector<string> user_input, char *zErrMsg, int rc, const char *sql)
 {
-	char *zErrMsg = 0;
-	int rc;
-	const char *sql;
-	boost::to_upper(user_input[0]);
-	trim(user_input[0]);
-	trim(user_input[1]);
-	trim(user_input[2]);
-
-	string dpz = "UPDATE MALTRACKER set " + user_input[0] + " = " + user_input[2] + " where NAME = " + user_input[1] + ";";
+	
+	// create sql statement to update entry in table
+	string dpz = "UPDATE MALTRACKER set " + user_input[0] + " = " + user_input[2] + " where NAME='" + user_input[1] + "';";
 	sql = dpz.c_str();
+	
+	// execute sql statement
 	rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
+	// control the return call of the execute function and print appropiate error messagess
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
 		sqlite3_free(zErrMsg);
@@ -371,5 +222,7 @@ void UpdateUserInput(sqlite3 *db, vector<string> user_input)
 	else{
 		fprintf(stdout, "Records updated successfully\n");
 	}
+
+	// close database
 	sqlite3_close(db);
 }
